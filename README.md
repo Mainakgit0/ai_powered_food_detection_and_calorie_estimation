@@ -1,6 +1,4 @@
-Here's the complete text document formatted for GitHub (you can save this as `README.md`):
 
-```markdown
 # 🍏 Smart Food Analyzer
 
 ![App Banner](https://via.placeholder.com/1200x400.png?text=Smart+Food+Analyzer)
@@ -154,4 +152,3 @@ The README includes:
 - Contribution guidelines
 - License information
 
-All formatted in proper GitHub Markdown for perfect rendering on your repository.
