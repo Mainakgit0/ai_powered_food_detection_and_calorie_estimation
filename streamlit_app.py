@@ -17,8 +17,7 @@ import re
 
 # ------------------- CONFIG ------------------- #
 genai.configure(api_key="AIzaSyAs9XpXyBxsKBC9ynAMN4lD6YT-5MPcAkI")
-GEMINI_CHAT_API_KEY = "your-gemini-chat-api-key"  # 👈 New separate key for chatbot
-gemini_chat_model = genai.GenerativeModel("AIzaSyA0MVpJdhxriWKiOo4pIkeU7fr6iVWADwk")  # Separate model instance
+gemini_model = genai.GenerativeModel("gemini-2.5-pro-exp-03-25")
 DAILY_CALORIES = 2000
 DAILY_MACROS = {"protein": 50, "carbs": 275, "fats": 70}
 
@@ -35,14 +34,11 @@ FOOD_DATABASE = {
     "Vegetable Stir Fry": {"calories": 250, "protein": 8, "carbs": 30, "fats": 12}
 }
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
 if "current_food_data" not in st.session_state:
     st.session_state.current_food_data = None
 
 # ------------------- STYLING ------------------- #
 # Custom CSS for better visuals
-# Replace the existing st.markdown CSS section with this updated version:
 st.markdown("""
 <style>
     /* Base styles that work in both light and dark modes */
@@ -69,19 +65,13 @@ st.markdown("""
         margin-bottom: 15px;
         border: 1px solid var(--border-color);
     }
-    .chat-user {
-        background-color: #E3F2FD;
-        padding: 10px;
-        border-radius: 10px 10px 0 10px;
-        margin: 5px 0;
-        color: #000000;
-    }
-    .chat-bot {
-        background-color: #F1F8E9;
-        padding: 10px;
-        border-radius: 10px 10px 10px 0;
-        margin: 5px 0;
-        color: #000000;
+    .detail-card {
+        background-color: var(--background-color);
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
     }
     .stProgress > div > div > div {
         background-color: #2E86AB;
@@ -129,18 +119,8 @@ st.markdown("""
             --border-color: #2d3741;
         }
         
-        .metric-card, .food-card, .tab-content {
+        .metric-card, .food-card, .tab-content, .detail-card {
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        
-        .chat-user {
-            background-color: #1a3a5c;
-            color: #FFFFFF !important;
-        }
-        
-        .chat-bot {
-            background-color: #2a4a2a;
-            color: #FFFFFF !important;
         }
     }
 </style>
@@ -271,7 +251,7 @@ def plot_line_comparison(user_macros, food_name="Your Food"):
     plt.clf()
 
 def plot_pie_chart(data):
-    fig, ax = plt.subplots(figsize=(4,4))
+    fig, ax = plt.subplots(figsize=(2,2))
     plt.style.use('default')
     sns.set_style("white")
     
@@ -289,7 +269,7 @@ def plot_pie_chart(data):
     
     wedges, texts, autotexts = ax.pie(values, explode=explode, labels=labels, 
                                      autopct='%1.1f%%', startangle=140, colors=colors,
-                                     textprops={'fontsize': 12}, pctdistance=0.85,
+                                     textprops={'fontsize': 6}, pctdistance=0.85,
                                      wedgeprops={'edgecolor': 'white', 'linewidth': 1})
     
     # Draw circle to make it a donut
@@ -298,7 +278,7 @@ def plot_pie_chart(data):
     
     # Equal aspect ratio ensures pie is drawn as a circle
     ax.axis('equal')  
-    plt.title('Macronutrient Distribution', fontsize=14, fontweight='bold', pad=20)
+    plt.title('Macronutrient Distribution', fontsize=10, fontweight='bold', pad=20)
     st.pyplot(fig)
     plt.clf()
 
@@ -333,7 +313,7 @@ def plot_calorie_comparison(user_calories, food_name="Your Food"):
     st.pyplot(plt)
     plt.clf()
 
-def suggest_healthier_option_gemini(macros, chat_model):
+def suggest_healthier_option_gemini(macros, model):
     prompt = f"""
 You are a professional nutritionist. A user uploaded food with this nutritional profile:
 - Calories: {macros['calories']} kcal
@@ -344,13 +324,43 @@ You are a professional nutritionist. A user uploaded food with this nutritional 
 Suggest 3 **healthier Food alternatives**. The alternatives must:
 - Have **lower calories and fats**
 - Include macro values in this format: Calories (kcal), Protein (g), Carbs (g), Fats (g)
+- Include a brief explanation of why each alternative is healthier
 
-Respond in bullet points with food names and their macros.
+Respond in bullet points with food names, their macros, and explanations.
 """
-    response = chat_model.generate_content(prompt)
+    response = model.generate_content(prompt)
     return response.text
 
-def generate_report(name, macros, gemini_summary, chat_model):
+def get_food_details(model, food_name, macros, vitamins):
+    prompt = f"""
+You are a professional nutritionist analyzing {food_name}. Provide detailed information about this food including:
+
+1. **Cultural Origins**: Where does this dish originate from? What cultures traditionally eat it?
+2. **Typical Ingredients**: List the main ingredients typically found in this dish
+3. **Health Benefits**: Based on its nutritional profile (Calories: {macros['calories']} kcal, Protein: {macros['protein']}g, Carbs: {macros['carbs']}g, Fats: {macros['fats']}g, Vitamins/Minerals: {vitamins}), what are the key health benefits?
+4. **Potential Concerns**: Are there any potential health concerns with consuming this food regularly?
+5. **Diet Compatibility**: Is this food suitable for: Vegetarian, Vegan, Keto, Gluten-free, Dairy-free diets?
+
+Format your response with clear headings for each section.
+"""
+    response = model.generate_content(prompt)
+    return response.text
+
+def get_recipe_suggestions(model, food_name):
+    prompt = f"""
+You are a professional chef specializing in healthy cooking. Provide:
+
+1. **Traditional Recipe**: A classic recipe for {food_name} with ingredients and step-by-step instructions
+2. **Healthier Variation**: A modified, healthier version of {food_name} with reduced calories/fats
+3. **Dietary Adaptations**: How to adapt this recipe for: Vegetarian, Vegan, Keto, Gluten-free diets
+
+Format your response with clear headings and bullet points for ingredients and numbered steps for instructions.
+Include approximate preparation and cooking times.
+"""
+    response = model.generate_content(prompt)
+    return response.text
+
+def generate_report(name, macros, gemini_summary, model):
     calorie_pct = macros['calories'] / DAILY_CALORIES * 100
     protein_pct = macros['protein'] / DAILY_MACROS['protein'] * 100
     carbs_pct = macros['carbs'] / DAILY_MACROS['carbs'] * 100
@@ -369,7 +379,7 @@ def generate_report(name, macros, gemini_summary, chat_model):
     suggestions_text = "\n".join(suggestions) if suggestions else "✅ This meal looks balanced for your goals!"
 
     alt_text = "\n### 🍽 Healthier Alternative Suggestions:\n"
-    alt_text += suggest_healthier_option_gemini(macros, chat_model)
+    alt_text += suggest_healthier_option_gemini(macros, model)
 
     return f"""
 # Nutrition Report — {name}
@@ -386,14 +396,12 @@ Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 {alt_text}
 
-## Analysis
-{gemini_summary}
 """
 
 # ------------------- STREAMLIT APP ------------------- #
 # Sidebar for user input
 with st.sidebar:
-    st.markdown("<h1 style='text-align: center; color: #2E86AB;'>🍽 Food Analyzer</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #2E86AB;font-size: 35px'><b>🍽 Food Analyzer</b></p>", unsafe_allow_html=True)
     st.markdown("---")
     uploaded_file = st.file_uploader("📸 Upload a food image", type=["jpg", "jpeg", "png"])
     mode = st.radio("Choose input type", ["By Weight (g)", "By Servings"], index=0)
@@ -431,7 +439,7 @@ if uploaded_file:
                 st.image(image, caption="Uploaded Food Image", use_column_width=True)
             
             with col2:
-                chat_model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
+                model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
                 portion = f"{weight} grams" if weight else f"{quantity} serving(s)"
                 nutrition_prompt = (
                     f"You are a nutritionist AI. The user uploaded a food image and ate about {portion}. "
@@ -440,12 +448,12 @@ if uploaded_file:
                     "Also suggest a name for this food item in this format: **Food Name**: [your suggestion]"
                 )
 
-                nutrition_response = chat_model.generate_content([nutrition_prompt, image])
+                nutrition_response = model.generate_content([nutrition_prompt, image])
                 st.success("✅ Analysis complete!")
                 
                 macros, food_name, vitamins, nutrition_text = extract_macros(nutrition_response.text)
                 
-                # Store current food data for chatbot
+                # Store current food data
                 st.session_state.current_food_data = {
                     "name": food_name,
                     "macros": macros,
@@ -540,7 +548,7 @@ if uploaded_file:
         st.markdown(f"<h2 style='color: #2E86AB;'>🥗 Healthier Alternatives</h2>", unsafe_allow_html=True)
         
         with st.spinner("Finding healthier options..."):
-            gemini_alternatives_text = suggest_healthier_option_gemini(macros, chat_model)
+            gemini_alternatives_text = suggest_healthier_option_gemini(macros, model)
             if "Calories" in gemini_alternatives_text:
                 st.markdown(f"""
                 <div class="food-card">
@@ -548,101 +556,50 @@ if uploaded_file:
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.info("Gemini couldn't find better alternatives. Try asking manually below.")
+                st.info("Couldn't find better alternatives for this food.")
+
+        # Food Details Section
+        st.markdown("---")
+        st.markdown(f"<h2 style='color: #2E86AB;'>🍲 Detailed Food Analysis: {food_name}</h2>", unsafe_allow_html=True)
+        
+        with st.spinner("Generating detailed food analysis..."):
+            food_details = get_food_details(model, food_name, macros, vitamins)
+            st.markdown(f"""
+            <div class="detail-card">
+                {food_details}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Recipe Suggestions Section
+        st.markdown("---")
+        st.markdown(f"<h2 style='color: #2E86AB;'>👨‍🍳 Recipe Suggestions for {food_name}</h2>", unsafe_allow_html=True)
+        
+        with st.spinner("Generating recipe ideas..."):
+            recipes = get_recipe_suggestions(model, food_name)
+            st.markdown(f"""
+            <div class="detail-card">
+                {recipes}
+            </div>
+            """, unsafe_allow_html=True)
 
         # Download Report
         st.markdown("---")
-        report_text = generate_report(food_name, macros, nutrition_response.text, chat_model)
+        report_text = generate_report(food_name, macros, nutrition_response.text, model)
         st.download_button("📄 Download Full Nutrition Report", report_text, file_name=f"nutrition_report_{food_name}.txt")
 
-# ------------------- FOOD-SPECIFIC CHATBOT SECTION ------------------- #
-if st.session_state.current_food_data:
-    st.markdown("---")
-    st.markdown(f"<h2 style='color: #2E86AB;'>💬 Ask About {st.session_state.current_food_data['name']}</h2>", unsafe_allow_html=True)
-    
-    if "food_chat_messages" not in st.session_state:
-        st.session_state.food_chat_messages = [
-            {
-                "role": "user",  # Gemini doesn't use "system" role like OpenAI
-                "parts": [f"""
-                You are a nutritionist analyzing **{st.session_state.current_food_data['name']}**. 
-                Here's its nutritional data:
-                - Calories: {st.session_state.current_food_data['macros']['calories']} kcal
-                - Protein: {st.session_state.current_food_data['macros']['protein']}g
-                - Carbs: {st.session_state.current_food_data['macros']['carbs']}g
-                - Fats: {st.session_state.current_food_data['macros']['fats']}g
-                - Vitamins/Minerals: {st.session_state.current_food_data['vitamins']}
-                
-                Answer future questions about this food's:
-                - Health impacts 🩺
-                - Dietary compatibility (keto/vegan/etc.) 🥗
-                - Portion advice 🍽️
-                - Comparisons to similar foods ⚖️
-                """
-                ]
-            }
-        ]
-    
-    # Display chat history
-    for message in st.session_state.food_chat_messages[1:]:  # Skip the initial context
-        if message["role"] == "user":
-            st.markdown(f"""
-            <div class="chat-user">
-                <strong>You:</strong> {message["parts"][0]}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="chat-bot">
-                <strong>Nutritionist:</strong> {message["parts"][0]}
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # User input
-    user_question = st.chat_input(f"Ask about {st.session_state.current_food_data['name']}...")
-    
-    if user_question:
-        # Add user question to chat
-        st.session_state.food_chat_messages.append({
-            "role": "user",
-            "parts": [user_question]
-        })
-        st.rerun()
-        
-        # Generate response using separate Gemini instance
-        with st.spinner("Analyzing your question..."):
-            try:
-                # Configure separate Gemini instance for chat
-                genai.configure(api_key=GEMINI_CHAT_API_KEY)  # Switch to chat API key
-                response = gemini_chat_model.generate_content(
-                    contents=st.session_state.food_chat_messages,
-                    generation_config={"temperature": 0.7}
-                )
-                
-                # Revert to original config for other operations
-                genai.configure(api_key="AIzaSyAs9XpXyBxsKBC9ynAMN4lD6YT-5MPcAkI")
-                
-                # Add response to chat
-                st.session_state.food_chat_messages.append({
-                    "role": "model",
-                    "parts": [response.text]
-                })
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"⚠️ Gemini Chat Error: {str(e)}")
-                st.session_state.food_chat_messages.append({
-                    "role": "model",
-                    "parts": ["Sorry, I couldn't process that. Please try again."]
-                })
-                st.rerun()
 else:
     # Initial empty state
-    if not uploaded_file:
-        st.markdown("""
-        <div style='text-align: center; padding: 50px;'>
-            <h2 style='color: #2E86AB;'>Welcome to Food Nutrition Analyzer!</h2>
-            <p>Upload a food image to get detailed nutritional analysis and AI-powered insights.</p>
-            <img src='https://cdn-icons-png.flaticon.com/512/3058/3058971.png' width='200'>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align: center; padding: 50px;'>
+        <h2 style='color: #2E86AB;'>Welcome to Food Nutrition Analyzer!</h2>
+        <p>Upload a food image to get detailed nutritional analysis and AI-powered insights.</p>
+        <img src='https://cdn-icons-png.flaticon.com/512/3058/3058971.png' width='200'>
+        <p><br>Features include:</p>
+        <ul style='text-align: left; display: inline-block;'>
+            <li>Nutritional analysis with visuals</li>
+            <li>Healthier alternative suggestions</li>
+            <li>Detailed food background information</li>
+            <li>Recipe suggestions and adaptations</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
