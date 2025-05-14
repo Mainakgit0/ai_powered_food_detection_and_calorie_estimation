@@ -17,7 +17,7 @@ import re
 
 # ------------------- CONFIG ------------------- #
 genai.configure(api_key="AIzaSyA0MVpJdhxriWKiOo4pIkeU7fr6iVWADwk ")
-gemini_model = genai.GenerativeModel("gemini-2.0-flash-lite")
+gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 DAILY_CALORIES = 2000
 DAILY_MACROS = {"protein": 50, "carbs": 275, "fats": 70}
 
@@ -38,10 +38,8 @@ if "current_food_data" not in st.session_state:
     st.session_state.current_food_data = None
 
 # ------------------- STYLING ------------------- #
-# Custom CSS for better visuals
 st.markdown("""
 <style>
-    /* Base styles that work in both light and dark modes */
     .header-style {
         font-size: 20px;
         font-weight: bold;
@@ -95,17 +93,14 @@ st.markdown("""
         border: 1px solid var(--border-color);
     }
     
-    /* Dark mode specific overrides */
     [data-testid="stAppViewContainer"] {
         background-color: var(--background-color);
     }
     
-    /* Text colors that work in both modes */
     body, .stMarkdown, .stText, .stAlert, .stSuccess, .stWarning, .stError {
         color: var(--text-color) !important;
     }
     
-    /* Custom properties for theme switching */
     :root {
         --background-color: #F8F9FA;
         --text-color: #000000;
@@ -125,6 +120,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ------------------- FUNCTIONS ------------------- #
 def extract_macros(response_text):
@@ -436,10 +432,10 @@ if uploaded_file:
         with st.container():
             col1, col2 = st.columns([1, 2])
             with col1:
-                st.image(image, caption="Uploaded Food Image", use_column_width=True)
+                st.image(image, caption="Uploaded Food Image", use_container_width=True)
             
             with col2:
-                model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
+                model = genai.GenerativeModel('gemini-2.0-flash')
                 portion = f"{weight} grams" if weight else f"{quantity} serving(s)"
                 nutrition_prompt = (
                     f"You are a nutritionist AI. The user uploaded a food image and ate about {portion}. "
