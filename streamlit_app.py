@@ -16,8 +16,8 @@ import re
 
 
 # ------------------- CONFIG ------------------- #
-genai.configure(api_key="AIzaSyAs9XpXyBxsKBC9ynAMN4lD6YT-5MPcAkI")
-gemini_model = genai.GenerativeModel("gemini-2.5-pro-exp-03-25")
+genai.configure(api_key="AIzaSyA0MVpJdhxriWKiOo4pIkeU7fr6iVWADwk ")
+gemini_model = genai.GenerativeModel("gemini-2.0-flash-lite")
 DAILY_CALORIES = 2000
 DAILY_MACROS = {"protein": 50, "carbs": 275, "fats": 70}
 
